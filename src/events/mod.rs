@@ -1,12 +1,15 @@
 mod event;
 mod event_listener;
 mod event_queue;
+
+mod application_events;
 mod keyboard_events;
 mod mouse_events;
 mod window_events;
 
 pub type EventBox = Box<dyn Event>;
 
+pub use self::application_events::*;
 pub use self::event::Event;
 pub use self::event_listener::EventListener;
 pub use self::event_queue::EventQueue;
