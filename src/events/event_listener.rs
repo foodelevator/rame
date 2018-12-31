@@ -1,7 +1,7 @@
 use crate::input::Button;
 use crate::vecs::Vec2;
 
-pub trait EventListener {
+pub trait EventListener: AsEventListener {
 	fn on_window_closed(&mut self) {}
 	fn on_window_resize(&mut self, _width: u32, _height: u32) {}
 	fn on_key_press(&mut self, _button: Button, _repeat: bool) -> bool {
@@ -24,5 +24,15 @@ pub trait EventListener {
 	}
 	fn on_mouse_scroll(&mut self, _delta: Vec2) -> bool {
 		false
+	}
+}
+
+pub trait AsEventListener {
+	fn as_event_listener(&mut self) -> &mut EventListener;
+}
+
+impl<T: EventListener> AsEventListener for T {
+	fn as_event_listener(&mut self) -> &mut EventListener {
+		self
 	}
 }

@@ -47,14 +47,9 @@ impl Application {
 		self.layer_stack.push_overlay(layer);
 	}
 
-	fn on_event(&mut self, event: EventBox) {
-		// if event << EventType::WindowClosed {
-		// 	self.on_window_close();
-		// }
-
+	fn on_event(&mut self, mut event: EventBox) {
 		for layer in self.layer_stack.iter_mut().rev() {
-			// layer.on_event(&event);
-			event.dispatch(layer.as_mut());
+			event.dispatch(layer.as_event_listener());
 			if event.is_handled() {
 				break;
 			}
