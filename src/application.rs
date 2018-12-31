@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::events::EventBox;
+use crate::events::{self, EventListener};
 use crate::layers::{Layer, LayerStack};
 use crate::window;
 
@@ -25,14 +25,26 @@ impl Application {
 	pub fn start(mut self) {
 		while self.running {
 			self.window.on_update();
-			while let Some(event) = self.window.pop_event() {
-				self.on_event(event);
+			while let Some(mut event) = self.window.pop_event() {
+				event.dispatch(&mut self);
+				for layer in self.layer_stack.iter_mut().rev() {
+					event.dispatch(layer.get_event_listener());
+					if event.is_handled() {
+						break;
+					}
+				}
+			}
+
+			let mut event = events::AppUpdateEvent::new();
+			for layer in self.layer_stack.iter_mut() {
+				event.dispatch(layer.get_event_listener());
 			}
 
 			self.window.clear_screen();
 
+			let mut event = events::AppRenderEvent::new();
 			for layer in self.layer_stack.iter_mut() {
-				layer.on_update();
+				event.dispatch(layer.get_event_listener());
 			}
 
 			self.window.swap_buffers();
@@ -46,17 +58,10 @@ impl Application {
 	pub fn push_overlay(&mut self, layer: Box<dyn Layer>) {
 		self.layer_stack.push_overlay(layer);
 	}
+}
 
-	fn on_event(&mut self, mut event: EventBox) {
-		for layer in self.layer_stack.iter_mut().rev() {
-			event.dispatch(layer.as_event_listener());
-			if event.is_handled() {
-				break;
-			}
-		}
-	}
-
-	fn on_window_close(&mut self) {
+impl EventListener for Application {
+	fn on_window_closed(&mut self) {
 		self.running = false;
 	}
 }
