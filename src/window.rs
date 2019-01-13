@@ -1,7 +1,6 @@
 use crate::error::Error;
 use crate::events::{self, EventBox, EventQueue};
 use crate::vecs::Vec2;
-use std::sync::mpsc;
 
 pub struct Window {
 	title: String,
@@ -9,9 +8,9 @@ pub struct Window {
 	height: u32,
 	vsync: bool,
 	event_queue: EventQueue,
-	// glfw specific stuff
-	glfw_window: glfw::Window,
-	glfw_events: mpsc::Receiver<(f64, glfw::WindowEvent)>,
+	// winit specific stuff
+	winit_window: winit::Window,
+	winit_events: winit::EventsLoop,
 }
 
 impl Window {
@@ -39,33 +38,17 @@ impl Window {
 // glfw specific stuff
 impl Window {
 	pub fn new(title: &str, width: u32, height: u32, vsync: bool) -> Result<Window, Error> {
-		let mut glfw = match glfw::init(glfw::FAIL_ON_ERRORS) {
-			Ok(glfw) => glfw,
-			Err(glfw::InitError::AlreadyInitialized) => glfw::Glfw,
-			Err(_) => return Err(Error {}), // TODO: add info
+		let winit_events = winit::EventsLoop::new();
+		let winit_window = match winit::WindowBuilder::new()
+			.with_title(title)
+			.build(&winit_events) {
+			Ok(winit_window) => winit_window,
+			Err(_) => return Err(Error {}),
 		};
 
-		let (mut glfw_window, glfw_events) =
-			match glfw.create_window(width, height, title, glfw::WindowMode::Windowed) {
-				Some(w) => w,
-				None => return Err(Error {}), // TODO: add info
-			};
+		// load gl functions
 
-		// Don't load the functions again if another window is created
-		if !gl::ClearColor::is_loaded() {
-			gl::load_with(|s| glfw_window.get_proc_address(s));
-		} else {
-			use glfw::Context;
-			glfw_window.make_current();
-		}
-
-		glfw_window.set_all_polling(true); // TODO: perhaps dont listen to EVERYTHING all the time
-
-		glfw.set_swap_interval(if vsync {
-			glfw::SwapInterval::Sync(1)
-		} else {
-			glfw::SwapInterval::None
-		});
+		// set vsync
 
 		Ok(Window {
 			title: title.to_string(),
@@ -73,211 +56,228 @@ impl Window {
 			height,
 			vsync,
 			event_queue: EventQueue::new(),
-			glfw_window,
-			glfw_events,
+			winit_window,
+			winit_events,
 		})
 	}
 
 	pub fn set_vsync(&mut self, vsync: bool) {
 		self.vsync = vsync;
-		self.glfw_window.glfw.set_swap_interval(if vsync {
-			glfw::SwapInterval::Sync(1)
-		} else {
-			glfw::SwapInterval::None
-		});
+		// set vsync
 	}
 
 	pub fn on_update(&mut self) {
 		use crate::input;
 
-		self.glfw_window.glfw.poll_events();
-		for (_time, event) in glfw::flush_messages(&self.glfw_events) {
-			fn convert_key_event(key: glfw::Key) -> input::Button {
+		let mut event_queue = EventQueue::new();
+		let mut new_size: Option<(u32, u32)> = None;
+		self.winit_events.poll_events(|event| {
+			fn convert_key_event(input: winit::KeyboardInput) -> input::Button {
 				use crate::input::Button::*;
-				use glfw::Key;
+				let key = match input.virtual_keycode {
+					Some(key) => key,
+					None => return Unknown,
+				};
 				match key {
-					Key::Space => Space,
-					Key::Apostrophe => Apostrophe,
-					Key::Comma => Comma,
-					Key::Minus => Minus,
-					Key::Period => Period,
-					Key::Slash => Slash,
-					Key::Num0 => Num0,
-					Key::Num1 => Num1,
-					Key::Num2 => Num2,
-					Key::Num3 => Num3,
-					Key::Num4 => Num4,
-					Key::Num5 => Num5,
-					Key::Num6 => Num6,
-					Key::Num7 => Num7,
-					Key::Num8 => Num8,
-					Key::Num9 => Num9,
-					Key::Semicolon => Semicolon,
-					Key::Equal => Equals,
-					Key::A => A,
-					Key::B => B,
-					Key::C => C,
-					Key::D => D,
-					Key::E => E,
-					Key::F => F,
-					Key::G => G,
-					Key::H => H,
-					Key::I => I,
-					Key::J => J,
-					Key::K => K,
-					Key::L => L,
-					Key::M => M,
-					Key::N => N,
-					Key::O => O,
-					Key::P => P,
-					Key::Q => Q,
-					Key::R => R,
-					Key::S => S,
-					Key::T => T,
-					Key::U => U,
-					Key::V => V,
-					Key::W => W,
-					Key::X => X,
-					Key::Y => Y,
-					Key::Z => Z,
-					Key::LeftBracket => BracketLeft,
-					Key::Backslash => Backslash,
-					Key::RightBracket => BracketRight,
-					Key::GraveAccent => Tilde,
-					Key::Escape => Esc,
-					Key::Enter => Enter,
-					Key::Tab => Tab,
-					Key::Backspace => Backspace,
-					Key::Insert => Insert,
-					Key::Delete => Delete,
-					Key::Right => ArrowRight,
-					Key::Left => ArrowLeft,
-					Key::Down => ArrowDown,
-					Key::Up => ArrowUp,
-					Key::PageUp => PgUp,
-					Key::PageDown => PgDown,
-					Key::Home => Home,
-					Key::End => End,
-					Key::CapsLock => CapsLock,
-					Key::ScrollLock => ScrollLock,
-					Key::NumLock => NumLock,
-					Key::PrintScreen => PrintScreen,
-					Key::Pause => Pause,
-					Key::F1 => F1,
-					Key::F2 => F2,
-					Key::F3 => F3,
-					Key::F4 => F4,
-					Key::F5 => F5,
-					Key::F6 => F6,
-					Key::F7 => F7,
-					Key::F8 => F8,
-					Key::F9 => F9,
-					Key::F10 => F10,
-					Key::F11 => F11,
-					Key::F12 => F12,
+					winit::VirtualKeyCode::Space => Space,
+					winit::VirtualKeyCode::Apostrophe => Apostrophe,
+					winit::VirtualKeyCode::Comma => Comma,
+					winit::VirtualKeyCode::Period => Period,
+					winit::VirtualKeyCode::Slash => Slash,
+					winit::VirtualKeyCode::Grave => Tilde,
+					winit::VirtualKeyCode::Key1 => Num1,
+					winit::VirtualKeyCode::Key2 => Num2,
+					winit::VirtualKeyCode::Key3 => Num3,
+					winit::VirtualKeyCode::Key4 => Num4,
+					winit::VirtualKeyCode::Key5 => Num5,
+					winit::VirtualKeyCode::Key6 => Num6,
+					winit::VirtualKeyCode::Key7 => Num7,
+					winit::VirtualKeyCode::Key8 => Num8,
+					winit::VirtualKeyCode::Key9 => Num9,
+					winit::VirtualKeyCode::Key0 => Num0,
+					winit::VirtualKeyCode::Subtract => Minus,
+					winit::VirtualKeyCode::Equals => Equals,
+					winit::VirtualKeyCode::A => A,
+					winit::VirtualKeyCode::B => B,
+					winit::VirtualKeyCode::C => C,
+					winit::VirtualKeyCode::D => D,
+					winit::VirtualKeyCode::E => E,
+					winit::VirtualKeyCode::F => F,
+					winit::VirtualKeyCode::G => G,
+					winit::VirtualKeyCode::H => H,
+					winit::VirtualKeyCode::I => I,
+					winit::VirtualKeyCode::J => J,
+					winit::VirtualKeyCode::K => K,
+					winit::VirtualKeyCode::L => L,
+					winit::VirtualKeyCode::M => M,
+					winit::VirtualKeyCode::N => N,
+					winit::VirtualKeyCode::O => O,
+					winit::VirtualKeyCode::P => P,
+					winit::VirtualKeyCode::Q => Q,
+					winit::VirtualKeyCode::R => R,
+					winit::VirtualKeyCode::S => S,
+					winit::VirtualKeyCode::T => T,
+					winit::VirtualKeyCode::U => U,
+					winit::VirtualKeyCode::V => V,
+					winit::VirtualKeyCode::W => W,
+					winit::VirtualKeyCode::X => X,
+					winit::VirtualKeyCode::Y => Y,
+					winit::VirtualKeyCode::Z => Z,
+					winit::VirtualKeyCode::LBracket => BracketLeft,
+					winit::VirtualKeyCode::RBracket => BracketRight,
+					winit::VirtualKeyCode::Backslash => Backslash,
+					winit::VirtualKeyCode::Semicolon => Semicolon,
+					winit::VirtualKeyCode::Escape => Esc,
+					winit::VirtualKeyCode::Return => Enter,
+					winit::VirtualKeyCode::Tab => Tab,
+					winit::VirtualKeyCode::Back => Backspace,
+					winit::VirtualKeyCode::Insert => Insert,
+					winit::VirtualKeyCode::Delete => Delete,
+					winit::VirtualKeyCode::Right => ArrowRight,
+					winit::VirtualKeyCode::Left => ArrowLeft,
+					winit::VirtualKeyCode::Down => ArrowDown,
+					winit::VirtualKeyCode::Up => ArrowUp,
+					winit::VirtualKeyCode::PageUp => PgUp,
+					winit::VirtualKeyCode::PageDown => PgDown,
+					winit::VirtualKeyCode::Home => Home,
+					winit::VirtualKeyCode::End => End,
+					winit::VirtualKeyCode::Capital => CapsLock,
+					winit::VirtualKeyCode::Scroll => ScrollLock,
+					winit::VirtualKeyCode::Numlock => NumLock,
+					winit::VirtualKeyCode::Snapshot => PrintScreen,
+					winit::VirtualKeyCode::Pause => Pause,
+					winit::VirtualKeyCode::F1 => F1,
+					winit::VirtualKeyCode::F2 => F2,
+					winit::VirtualKeyCode::F3 => F3,
+					winit::VirtualKeyCode::F4 => F4,
+					winit::VirtualKeyCode::F5 => F5,
+					winit::VirtualKeyCode::F6 => F6,
+					winit::VirtualKeyCode::F7 => F7,
+					winit::VirtualKeyCode::F8 => F8,
+					winit::VirtualKeyCode::F9 => F9,
+					winit::VirtualKeyCode::F10 => F10,
+					winit::VirtualKeyCode::F11 => F11,
+					winit::VirtualKeyCode::F12 => F12,
 					// there are up to F25 in glfw but fuk dat
-					Key::Kp0 => NumPad0,
-					Key::Kp1 => NumPad1,
-					Key::Kp2 => NumPad2,
-					Key::Kp3 => NumPad3,
-					Key::Kp4 => NumPad4,
-					Key::Kp5 => NumPad5,
-					Key::Kp6 => NumPad6,
-					Key::Kp7 => NumPad7,
-					Key::Kp8 => NumPad8,
-					Key::Kp9 => NumPad9,
-					Key::KpDecimal => NumPadDec,
-					Key::KpDivide => NumPadDiv,
-					Key::KpMultiply => NumPadMult,
-					Key::KpSubtract => NumPadSub,
-					Key::KpAdd => NumPadAdd,
-					Key::KpEnter => NumPadEnter,
-					Key::KpEqual => NumPadEq,
-					Key::LeftShift => LShift,
-					Key::LeftControl => LCtrl,
-					Key::LeftAlt => LAlt,
-					Key::LeftSuper => LSuper,
-					Key::RightShift => RShift,
-					Key::RightControl => RCtrl,
-					Key::RightAlt => RAlt,
-					Key::RightSuper => RSuper,
-					Key::Menu => Menu,
+					winit::VirtualKeyCode::Numpad0 => NumPad0,
+					winit::VirtualKeyCode::Numpad1 => NumPad1,
+					winit::VirtualKeyCode::Numpad2 => NumPad2,
+					winit::VirtualKeyCode::Numpad3 => NumPad3,
+					winit::VirtualKeyCode::Numpad4 => NumPad4,
+					winit::VirtualKeyCode::Numpad5 => NumPad5,
+					winit::VirtualKeyCode::Numpad6 => NumPad6,
+					winit::VirtualKeyCode::Numpad7 => NumPad7,
+					winit::VirtualKeyCode::Numpad8 => NumPad8,
+					winit::VirtualKeyCode::Numpad9 => NumPad9,
+					winit::VirtualKeyCode::NumpadComma => NumPadDec,
+					winit::VirtualKeyCode::Divide => NumPadDiv,
+					winit::VirtualKeyCode::Multiply => NumPadMult,
+					winit::VirtualKeyCode::Minus => NumPadSub,
+					winit::VirtualKeyCode::Add => NumPadAdd,
+					winit::VirtualKeyCode::NumpadEnter => NumPadEnter,
+					winit::VirtualKeyCode::NumpadEquals => NumPadEq,
+					winit::VirtualKeyCode::LShift => LShift,
+					winit::VirtualKeyCode::LControl => LCtrl,
+					winit::VirtualKeyCode::LAlt => LAlt,
+					winit::VirtualKeyCode::LWin => LSuper,
+					winit::VirtualKeyCode::RShift => RShift,
+					winit::VirtualKeyCode::RControl => RCtrl,
+					winit::VirtualKeyCode::RAlt => RAlt,
+					winit::VirtualKeyCode::RWin => RSuper,
 					_ => Unknown,
 				}
 			}
 			match event {
-				glfw::WindowEvent::Close => {
-					self.event_queue.push(events::WindowClosedEvent::new());
-				}
-				glfw::WindowEvent::Size(width, height) => {
-					self.width = width as u32;
-					self.height = height as u32;
-					self.event_queue
-						.push(events::WindowResizedEvent::new(width as u32, height as u32));
-				}
-				glfw::WindowEvent::Key(key, _, glfw::Action::Press, _) => {
-					self.event_queue
-						.push(events::KeyPressedEvent::new(convert_key_event(key), false));
-				}
-				glfw::WindowEvent::Key(key, _, glfw::Action::Repeat, _) => {
-					self.event_queue
-						.push(events::KeyPressedEvent::new(convert_key_event(key), true));
-				}
-				glfw::WindowEvent::Key(key, _, glfw::Action::Release, _) => {
-					self.event_queue
-						.push(events::KeyReleasedEvent::new(convert_key_event(key)));
-				}
-				glfw::WindowEvent::Char(c) => {
-					self.event_queue.push(events::CharWrittenEvent::new(c));
-				}
-				glfw::WindowEvent::MouseButton(button, glfw::Action::Press, _) => {
-					self.event_queue
-						.push(events::MousePressedEvent::new(match button {
-							glfw::MouseButton::Button1 => input::Button::MouseLeft,
-							glfw::MouseButton::Button2 => input::Button::MouseRight,
-							glfw::MouseButton::Button3 => input::Button::MouseMiddle,
-							glfw::MouseButton::Button4 => input::Button::Mouse4,
-							glfw::MouseButton::Button5 => input::Button::Mouse5,
-							glfw::MouseButton::Button6 => input::Button::Mouse6,
-							glfw::MouseButton::Button7 => input::Button::Mouse7,
-							glfw::MouseButton::Button8 => input::Button::Mouse8,
-						}));
-				}
-				glfw::WindowEvent::MouseButton(button, glfw::Action::Release, _) => {
-					self.event_queue
-						.push(events::MouseReleasedEvent::new(match button {
-							glfw::MouseButton::Button1 => input::Button::MouseLeft,
-							glfw::MouseButton::Button2 => input::Button::MouseRight,
-							glfw::MouseButton::Button3 => input::Button::MouseMiddle,
-							glfw::MouseButton::Button4 => input::Button::Mouse4,
-							glfw::MouseButton::Button5 => input::Button::Mouse5,
-							glfw::MouseButton::Button6 => input::Button::Mouse6,
-							glfw::MouseButton::Button7 => input::Button::Mouse7,
-							glfw::MouseButton::Button8 => input::Button::Mouse8,
-						}));
-				}
-				glfw::WindowEvent::Scroll(delta_x, delta_y) => {
-					self.event_queue
-						.push(events::MouseScrolledEvent::new(Vec2::new(delta_x, delta_y)));
-				}
-				glfw::WindowEvent::CursorPos(x, y) => {
-					self.event_queue
-						.push(events::MouseMovedEvent::new(Vec2::new(x, y)));
-				}
+				winit::Event::WindowEvent { event, .. } => {
+					match event {
+						winit::WindowEvent::CloseRequested => {
+							event_queue.push(events::WindowClosedEvent::new());
+						}
+						winit::WindowEvent::Resized(size) => {
+							let (width, height): (u32, u32) = size.into();
+							new_size = Some((width, height));
+							event_queue.push(events::WindowResizedEvent::new(width, height));
+						}
+						winit::WindowEvent::KeyboardInput { input, .. } => {
+							event_queue.push(match input.state {
+								winit::ElementState::Pressed => {
+									events::KeyPressedEvent::new(convert_key_event(input), false)
+								}
+								// TODO: add key repetition detection
+								winit::ElementState::Released => {
+									events::KeyReleasedEvent::new(convert_key_event(input))
+								}
+							});
+						}
+						winit::WindowEvent::ReceivedCharacter(c) => {
+							event_queue.push(events::CharWrittenEvent::new(c));
+						}
+						winit::WindowEvent::MouseInput { state, button, .. } => {
+							event_queue.push(match state {
+								winit::ElementState::Pressed => {
+									events::MousePressedEvent::new(match button {
+										winit::MouseButton::Left => input::Button::MouseLeft,
+										winit::MouseButton::Middle => input::Button::MouseMiddle,
+										winit::MouseButton::Right => input::Button::MouseRight,
+										winit::MouseButton::Other(4) => input::Button::Mouse4,
+										winit::MouseButton::Other(5) => input::Button::Mouse5,
+										winit::MouseButton::Other(6) => input::Button::Mouse6,
+										winit::MouseButton::Other(7) => input::Button::Mouse7,
+										winit::MouseButton::Other(8) => input::Button::Mouse8,
+										winit::MouseButton::Other(_) => input::Button::Unknown,
+									})
+								}
+								winit::ElementState::Released => {
+									events::MouseReleasedEvent::new(match button {
+										winit::MouseButton::Left => input::Button::MouseLeft,
+										winit::MouseButton::Middle => input::Button::MouseMiddle,
+										winit::MouseButton::Right => input::Button::MouseRight,
+										winit::MouseButton::Other(4) => input::Button::Mouse4,
+										winit::MouseButton::Other(5) => input::Button::Mouse5,
+										winit::MouseButton::Other(6) => input::Button::Mouse6,
+										winit::MouseButton::Other(7) => input::Button::Mouse7,
+										winit::MouseButton::Other(8) => input::Button::Mouse8,
+										winit::MouseButton::Other(_) => input::Button::Unknown,
+									})
+								}
+							});
+						}
+						winit::WindowEvent::MouseWheel { delta, .. } => {
+							event_queue.push(events::MouseScrolledEvent::new(match delta {
+								winit::MouseScrollDelta::LineDelta(x, y) => Vec2::new(x.into(), y.into()),
+								winit::MouseScrollDelta::PixelDelta(d) => Vec2::new(d.x, d.y),
+								// NOTE: Perhaps scrolling speed will be fucked
+								// depending on which eventis received here.
+							}));
+						}
+						winit::WindowEvent::CursorMoved { position: pos, .. } => {
+							event_queue.push(events::MouseMovedEvent::new(Vec2::new(pos.x, pos.y)));
+						}
+						_ => {}
+					}
+				},
 				_ => {}
 			}
+		});
+
+		if let Some(new_size) = new_size {
+			self.width = new_size.0;
+			self.height = new_size.1;
+		}
+
+		while let Some(event) = event_queue.next() {
+			self.event_queue.push(event);
 		}
 	}
 
 	pub fn clear_screen(&mut self) {
 		unsafe {
-			gl::ClearColor(0.05, 0.05, 0.09, 1.0);
-			gl::Clear(gl::COLOR_BUFFER_BIT);
+			// gl::ClearColor(0.05, 0.05, 0.09, 1.0);
+			// gl::Clear(gl::COLOR_BUFFER_BIT);
 		}
 	}
 
 	pub fn swap_buffers(&mut self) {
-		use glfw::Context;
-		self.glfw_window.swap_buffers();
+		// is this even possible with winit?
 	}
 }
