@@ -6,3 +6,5 @@ pub mod layers;
 pub mod logging;
 pub mod vecs;
 pub mod window;
+
+pub type Float = f64;

@@ -1,6 +1,7 @@
 use crate::error::Error;
 use crate::events::{self, EventBox, EventQueue};
 use crate::vecs::Vec2;
+use crate::Float;
 
 pub struct Window {
 	title: String,
@@ -245,13 +246,13 @@ impl Window {
 						winit::WindowEvent::MouseWheel { delta, .. } => {
 							event_queue.push(events::MouseScrolledEvent::new(match delta {
 								winit::MouseScrollDelta::LineDelta(x, y) => Vec2::new(x.into(), y.into()),
-								winit::MouseScrollDelta::PixelDelta(d) => Vec2::new(d.x, d.y),
+								winit::MouseScrollDelta::PixelDelta(d) => Vec2::new(d.x as Float, d.y as Float),
 								// NOTE: Perhaps scrolling speed will be fucked
 								// depending on which eventis received here.
 							}));
 						}
 						winit::WindowEvent::CursorMoved { position: pos, .. } => {
-							event_queue.push(events::MouseMovedEvent::new(Vec2::new(pos.x, pos.y)));
+							event_queue.push(events::MouseMovedEvent::new(Vec2::new(pos.x as Float, pos.y as Float)));
 						}
 						_ => {}
 					}
