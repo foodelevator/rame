@@ -276,9 +276,14 @@ impl Window {
 		}
 	}
 
+	pub fn clear_color(&mut self, r: Float, g: Float, b: Float) {
+		unsafe {
+			gl::ClearColor(r as _, g as _, b as _, 1.0);
+		}
+	}
+
 	pub fn clear_screen(&mut self) {
 		unsafe {
-			gl::ClearColor(0.05, 0.05, 0.09, 1.0);
 			gl::Clear(gl::COLOR_BUFFER_BIT);
 		}
 	}

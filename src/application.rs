@@ -29,6 +29,8 @@ impl Application {
 	}
 
 	pub fn start(mut self) {
+		self.window.clear_color(0.15, 0.1, 0.9);
+
 		while self.is_running {
 			self.window.on_update();
 			while let Some(mut event) = self.window.pop_event() {
