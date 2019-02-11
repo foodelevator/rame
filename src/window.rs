@@ -9,9 +9,9 @@ pub struct Window {
 	height: u32,
 	vsync: bool,
 	event_queue: EventQueue,
-	// winit specific stuff
-	winit_window: winit::Window,
-	winit_events: winit::EventsLoop,
+	// glutin specific stuff
+	glutin_window: glutin::GlWindow,
+	glutin_events: glutin::EventsLoop,
 }
 
 impl Window {
@@ -39,17 +39,23 @@ impl Window {
 // glfw specific stuff
 impl Window {
 	pub fn new(title: &str, width: u32, height: u32, vsync: bool) -> Result<Window, Error> {
-		let winit_events = winit::EventsLoop::new();
-		let winit_window = match winit::WindowBuilder::new()
-			.with_title(title)
-			.build(&winit_events) {
-			Ok(winit_window) => winit_window,
-			Err(_) => return Err(Error {}),
+		let glutin_events = glutin::EventsLoop::new();
+		let window_builder = glutin::WindowBuilder::new()
+			.with_dimensions(glutin::dpi::LogicalSize::new(width as _, height as _))
+			.with_title(title);
+		let gl_context = glutin::ContextBuilder::new().
+			with_vsync(vsync);
+
+		let glutin_window = match glutin::GlWindow::new(window_builder, gl_context, &glutin_events) {
+			Ok(w) => w,
+			Err(_err) => return Err(Error {})
 		};
 
-		// load gl functions
-
-		// set vsync
+		unsafe {
+			use glutin::GlContext;
+			glutin_window.make_current().unwrap();
+			gl::load_with(|s| glutin_window.get_proc_address(s) as _);
+		}
 
 		Ok(Window {
 			title: title.to_string(),
@@ -57,14 +63,14 @@ impl Window {
 			height,
 			vsync,
 			event_queue: EventQueue::new(),
-			winit_window,
-			winit_events,
+			glutin_window,
+			glutin_events,
 		})
 	}
 
 	pub fn set_vsync(&mut self, vsync: bool) {
 		self.vsync = vsync;
-		// set vsync
+		unimplemented!();
 	}
 
 	pub fn on_update(&mut self) {
@@ -72,186 +78,185 @@ impl Window {
 
 		let mut event_queue = EventQueue::new();
 		let mut new_size: Option<(u32, u32)> = None;
-		self.winit_events.poll_events(|event| {
-			fn convert_key_event(input: winit::KeyboardInput) -> input::Button {
+		self.glutin_events.poll_events(|event| {
+			fn convert_key_event(input: glutin::KeyboardInput) -> input::Button {
 				use crate::input::Button::*;
 				let key = match input.virtual_keycode {
 					Some(key) => key,
 					None => return Unknown,
 				};
 				match key {
-					winit::VirtualKeyCode::Space => Space,
-					winit::VirtualKeyCode::Apostrophe => Apostrophe,
-					winit::VirtualKeyCode::Comma => Comma,
-					winit::VirtualKeyCode::Period => Period,
-					winit::VirtualKeyCode::Slash => Slash,
-					winit::VirtualKeyCode::Grave => Tilde,
-					winit::VirtualKeyCode::Key1 => Num1,
-					winit::VirtualKeyCode::Key2 => Num2,
-					winit::VirtualKeyCode::Key3 => Num3,
-					winit::VirtualKeyCode::Key4 => Num4,
-					winit::VirtualKeyCode::Key5 => Num5,
-					winit::VirtualKeyCode::Key6 => Num6,
-					winit::VirtualKeyCode::Key7 => Num7,
-					winit::VirtualKeyCode::Key8 => Num8,
-					winit::VirtualKeyCode::Key9 => Num9,
-					winit::VirtualKeyCode::Key0 => Num0,
-					winit::VirtualKeyCode::Subtract => Minus,
-					winit::VirtualKeyCode::Equals => Equals,
-					winit::VirtualKeyCode::A => A,
-					winit::VirtualKeyCode::B => B,
-					winit::VirtualKeyCode::C => C,
-					winit::VirtualKeyCode::D => D,
-					winit::VirtualKeyCode::E => E,
-					winit::VirtualKeyCode::F => F,
-					winit::VirtualKeyCode::G => G,
-					winit::VirtualKeyCode::H => H,
-					winit::VirtualKeyCode::I => I,
-					winit::VirtualKeyCode::J => J,
-					winit::VirtualKeyCode::K => K,
-					winit::VirtualKeyCode::L => L,
-					winit::VirtualKeyCode::M => M,
-					winit::VirtualKeyCode::N => N,
-					winit::VirtualKeyCode::O => O,
-					winit::VirtualKeyCode::P => P,
-					winit::VirtualKeyCode::Q => Q,
-					winit::VirtualKeyCode::R => R,
-					winit::VirtualKeyCode::S => S,
-					winit::VirtualKeyCode::T => T,
-					winit::VirtualKeyCode::U => U,
-					winit::VirtualKeyCode::V => V,
-					winit::VirtualKeyCode::W => W,
-					winit::VirtualKeyCode::X => X,
-					winit::VirtualKeyCode::Y => Y,
-					winit::VirtualKeyCode::Z => Z,
-					winit::VirtualKeyCode::LBracket => BracketLeft,
-					winit::VirtualKeyCode::RBracket => BracketRight,
-					winit::VirtualKeyCode::Backslash => Backslash,
-					winit::VirtualKeyCode::Semicolon => Semicolon,
-					winit::VirtualKeyCode::Escape => Esc,
-					winit::VirtualKeyCode::Return => Enter,
-					winit::VirtualKeyCode::Tab => Tab,
-					winit::VirtualKeyCode::Back => Backspace,
-					winit::VirtualKeyCode::Insert => Insert,
-					winit::VirtualKeyCode::Delete => Delete,
-					winit::VirtualKeyCode::Right => ArrowRight,
-					winit::VirtualKeyCode::Left => ArrowLeft,
-					winit::VirtualKeyCode::Down => ArrowDown,
-					winit::VirtualKeyCode::Up => ArrowUp,
-					winit::VirtualKeyCode::PageUp => PgUp,
-					winit::VirtualKeyCode::PageDown => PgDown,
-					winit::VirtualKeyCode::Home => Home,
-					winit::VirtualKeyCode::End => End,
-					winit::VirtualKeyCode::Capital => CapsLock,
-					winit::VirtualKeyCode::Scroll => ScrollLock,
-					winit::VirtualKeyCode::Numlock => NumLock,
-					winit::VirtualKeyCode::Snapshot => PrintScreen,
-					winit::VirtualKeyCode::Pause => Pause,
-					winit::VirtualKeyCode::F1 => F1,
-					winit::VirtualKeyCode::F2 => F2,
-					winit::VirtualKeyCode::F3 => F3,
-					winit::VirtualKeyCode::F4 => F4,
-					winit::VirtualKeyCode::F5 => F5,
-					winit::VirtualKeyCode::F6 => F6,
-					winit::VirtualKeyCode::F7 => F7,
-					winit::VirtualKeyCode::F8 => F8,
-					winit::VirtualKeyCode::F9 => F9,
-					winit::VirtualKeyCode::F10 => F10,
-					winit::VirtualKeyCode::F11 => F11,
-					winit::VirtualKeyCode::F12 => F12,
-					// there are up to F25 in glfw but fuk dat
-					winit::VirtualKeyCode::Numpad0 => NumPad0,
-					winit::VirtualKeyCode::Numpad1 => NumPad1,
-					winit::VirtualKeyCode::Numpad2 => NumPad2,
-					winit::VirtualKeyCode::Numpad3 => NumPad3,
-					winit::VirtualKeyCode::Numpad4 => NumPad4,
-					winit::VirtualKeyCode::Numpad5 => NumPad5,
-					winit::VirtualKeyCode::Numpad6 => NumPad6,
-					winit::VirtualKeyCode::Numpad7 => NumPad7,
-					winit::VirtualKeyCode::Numpad8 => NumPad8,
-					winit::VirtualKeyCode::Numpad9 => NumPad9,
-					winit::VirtualKeyCode::NumpadComma => NumPadDec,
-					winit::VirtualKeyCode::Divide => NumPadDiv,
-					winit::VirtualKeyCode::Multiply => NumPadMult,
-					winit::VirtualKeyCode::Minus => NumPadSub,
-					winit::VirtualKeyCode::Add => NumPadAdd,
-					winit::VirtualKeyCode::NumpadEnter => NumPadEnter,
-					winit::VirtualKeyCode::NumpadEquals => NumPadEq,
-					winit::VirtualKeyCode::LShift => LShift,
-					winit::VirtualKeyCode::LControl => LCtrl,
-					winit::VirtualKeyCode::LAlt => LAlt,
-					winit::VirtualKeyCode::LWin => LSuper,
-					winit::VirtualKeyCode::RShift => RShift,
-					winit::VirtualKeyCode::RControl => RCtrl,
-					winit::VirtualKeyCode::RAlt => RAlt,
-					winit::VirtualKeyCode::RWin => RSuper,
+					glutin::VirtualKeyCode::Space => Space,
+					glutin::VirtualKeyCode::Apostrophe => Apostrophe,
+					glutin::VirtualKeyCode::Comma => Comma,
+					glutin::VirtualKeyCode::Period => Period,
+					glutin::VirtualKeyCode::Slash => Slash,
+					glutin::VirtualKeyCode::Grave => Tilde,
+					glutin::VirtualKeyCode::Key1 => Num1,
+					glutin::VirtualKeyCode::Key2 => Num2,
+					glutin::VirtualKeyCode::Key3 => Num3,
+					glutin::VirtualKeyCode::Key4 => Num4,
+					glutin::VirtualKeyCode::Key5 => Num5,
+					glutin::VirtualKeyCode::Key6 => Num6,
+					glutin::VirtualKeyCode::Key7 => Num7,
+					glutin::VirtualKeyCode::Key8 => Num8,
+					glutin::VirtualKeyCode::Key9 => Num9,
+					glutin::VirtualKeyCode::Key0 => Num0,
+					glutin::VirtualKeyCode::Subtract => Minus,
+					glutin::VirtualKeyCode::Equals => Equals,
+					glutin::VirtualKeyCode::A => A,
+					glutin::VirtualKeyCode::B => B,
+					glutin::VirtualKeyCode::C => C,
+					glutin::VirtualKeyCode::D => D,
+					glutin::VirtualKeyCode::E => E,
+					glutin::VirtualKeyCode::F => F,
+					glutin::VirtualKeyCode::G => G,
+					glutin::VirtualKeyCode::H => H,
+					glutin::VirtualKeyCode::I => I,
+					glutin::VirtualKeyCode::J => J,
+					glutin::VirtualKeyCode::K => K,
+					glutin::VirtualKeyCode::L => L,
+					glutin::VirtualKeyCode::M => M,
+					glutin::VirtualKeyCode::N => N,
+					glutin::VirtualKeyCode::O => O,
+					glutin::VirtualKeyCode::P => P,
+					glutin::VirtualKeyCode::Q => Q,
+					glutin::VirtualKeyCode::R => R,
+					glutin::VirtualKeyCode::S => S,
+					glutin::VirtualKeyCode::T => T,
+					glutin::VirtualKeyCode::U => U,
+					glutin::VirtualKeyCode::V => V,
+					glutin::VirtualKeyCode::W => W,
+					glutin::VirtualKeyCode::X => X,
+					glutin::VirtualKeyCode::Y => Y,
+					glutin::VirtualKeyCode::Z => Z,
+					glutin::VirtualKeyCode::LBracket => BracketLeft,
+					glutin::VirtualKeyCode::RBracket => BracketRight,
+					glutin::VirtualKeyCode::Backslash => Backslash,
+					glutin::VirtualKeyCode::Semicolon => Semicolon,
+					glutin::VirtualKeyCode::Escape => Esc,
+					glutin::VirtualKeyCode::Return => Enter,
+					glutin::VirtualKeyCode::Tab => Tab,
+					glutin::VirtualKeyCode::Back => Backspace,
+					glutin::VirtualKeyCode::Insert => Insert,
+					glutin::VirtualKeyCode::Delete => Delete,
+					glutin::VirtualKeyCode::Right => ArrowRight,
+					glutin::VirtualKeyCode::Left => ArrowLeft,
+					glutin::VirtualKeyCode::Down => ArrowDown,
+					glutin::VirtualKeyCode::Up => ArrowUp,
+					glutin::VirtualKeyCode::PageUp => PgUp,
+					glutin::VirtualKeyCode::PageDown => PgDown,
+					glutin::VirtualKeyCode::Home => Home,
+					glutin::VirtualKeyCode::End => End,
+					glutin::VirtualKeyCode::Capital => CapsLock,
+					glutin::VirtualKeyCode::Scroll => ScrollLock,
+					glutin::VirtualKeyCode::Numlock => NumLock,
+					glutin::VirtualKeyCode::Snapshot => PrintScreen,
+					glutin::VirtualKeyCode::Pause => Pause,
+					glutin::VirtualKeyCode::F1 => F1,
+					glutin::VirtualKeyCode::F2 => F2,
+					glutin::VirtualKeyCode::F3 => F3,
+					glutin::VirtualKeyCode::F4 => F4,
+					glutin::VirtualKeyCode::F5 => F5,
+					glutin::VirtualKeyCode::F6 => F6,
+					glutin::VirtualKeyCode::F7 => F7,
+					glutin::VirtualKeyCode::F8 => F8,
+					glutin::VirtualKeyCode::F9 => F9,
+					glutin::VirtualKeyCode::F10 => F10,
+					glutin::VirtualKeyCode::F11 => F11,
+					glutin::VirtualKeyCode::F12 => F12,
+					glutin::VirtualKeyCode::Numpad0 => NumPad0,
+					glutin::VirtualKeyCode::Numpad1 => NumPad1,
+					glutin::VirtualKeyCode::Numpad2 => NumPad2,
+					glutin::VirtualKeyCode::Numpad3 => NumPad3,
+					glutin::VirtualKeyCode::Numpad4 => NumPad4,
+					glutin::VirtualKeyCode::Numpad5 => NumPad5,
+					glutin::VirtualKeyCode::Numpad6 => NumPad6,
+					glutin::VirtualKeyCode::Numpad7 => NumPad7,
+					glutin::VirtualKeyCode::Numpad8 => NumPad8,
+					glutin::VirtualKeyCode::Numpad9 => NumPad9,
+					glutin::VirtualKeyCode::NumpadComma => NumPadDec,
+					glutin::VirtualKeyCode::Divide => NumPadDiv,
+					glutin::VirtualKeyCode::Multiply => NumPadMult,
+					glutin::VirtualKeyCode::Minus => NumPadSub,
+					glutin::VirtualKeyCode::Add => NumPadAdd,
+					glutin::VirtualKeyCode::NumpadEnter => NumPadEnter,
+					glutin::VirtualKeyCode::NumpadEquals => NumPadEq,
+					glutin::VirtualKeyCode::LShift => LShift,
+					glutin::VirtualKeyCode::LControl => LCtrl,
+					glutin::VirtualKeyCode::LAlt => LAlt,
+					glutin::VirtualKeyCode::LWin => LSuper,
+					glutin::VirtualKeyCode::RShift => RShift,
+					glutin::VirtualKeyCode::RControl => RCtrl,
+					glutin::VirtualKeyCode::RAlt => RAlt,
+					glutin::VirtualKeyCode::RWin => RSuper,
 					_ => Unknown,
 				}
 			}
 			match event {
-				winit::Event::WindowEvent { event, .. } => {
+				glutin::Event::WindowEvent { event, .. } => {
 					match event {
-						winit::WindowEvent::CloseRequested => {
+						glutin::WindowEvent::CloseRequested => {
 							event_queue.push(events::WindowClosedEvent::new());
 						}
-						winit::WindowEvent::Resized(size) => {
+						glutin::WindowEvent::Resized(size) => {
 							let (width, height): (u32, u32) = size.into();
 							new_size = Some((width, height));
 							event_queue.push(events::WindowResizedEvent::new(width, height));
 						}
-						winit::WindowEvent::KeyboardInput { input, .. } => {
+						glutin::WindowEvent::KeyboardInput { input, .. } => {
 							event_queue.push(match input.state {
-								winit::ElementState::Pressed => {
+								glutin::ElementState::Pressed => {
 									events::KeyPressedEvent::new(convert_key_event(input), false)
 								}
 								// TODO: add key repetition detection
-								winit::ElementState::Released => {
+								glutin::ElementState::Released => {
 									events::KeyReleasedEvent::new(convert_key_event(input))
 								}
 							});
 						}
-						winit::WindowEvent::ReceivedCharacter(c) => {
+						glutin::WindowEvent::ReceivedCharacter(c) => {
 							event_queue.push(events::CharWrittenEvent::new(c));
 						}
-						winit::WindowEvent::MouseInput { state, button, .. } => {
+						glutin::WindowEvent::MouseInput { state, button, .. } => {
 							event_queue.push(match state {
-								winit::ElementState::Pressed => {
+								glutin::ElementState::Pressed => {
 									events::MousePressedEvent::new(match button {
-										winit::MouseButton::Left => input::Button::MouseLeft,
-										winit::MouseButton::Middle => input::Button::MouseMiddle,
-										winit::MouseButton::Right => input::Button::MouseRight,
-										winit::MouseButton::Other(4) => input::Button::Mouse4,
-										winit::MouseButton::Other(5) => input::Button::Mouse5,
-										winit::MouseButton::Other(6) => input::Button::Mouse6,
-										winit::MouseButton::Other(7) => input::Button::Mouse7,
-										winit::MouseButton::Other(8) => input::Button::Mouse8,
-										winit::MouseButton::Other(_) => input::Button::Unknown,
+										glutin::MouseButton::Left => input::Button::MouseLeft,
+										glutin::MouseButton::Middle => input::Button::MouseMiddle,
+										glutin::MouseButton::Right => input::Button::MouseRight,
+										glutin::MouseButton::Other(4) => input::Button::Mouse4,
+										glutin::MouseButton::Other(5) => input::Button::Mouse5,
+										glutin::MouseButton::Other(6) => input::Button::Mouse6,
+										glutin::MouseButton::Other(7) => input::Button::Mouse7,
+										glutin::MouseButton::Other(8) => input::Button::Mouse8,
+										glutin::MouseButton::Other(_) => input::Button::Unknown,
 									})
 								}
-								winit::ElementState::Released => {
+								glutin::ElementState::Released => {
 									events::MouseReleasedEvent::new(match button {
-										winit::MouseButton::Left => input::Button::MouseLeft,
-										winit::MouseButton::Middle => input::Button::MouseMiddle,
-										winit::MouseButton::Right => input::Button::MouseRight,
-										winit::MouseButton::Other(4) => input::Button::Mouse4,
-										winit::MouseButton::Other(5) => input::Button::Mouse5,
-										winit::MouseButton::Other(6) => input::Button::Mouse6,
-										winit::MouseButton::Other(7) => input::Button::Mouse7,
-										winit::MouseButton::Other(8) => input::Button::Mouse8,
-										winit::MouseButton::Other(_) => input::Button::Unknown,
+										glutin::MouseButton::Left => input::Button::MouseLeft,
+										glutin::MouseButton::Middle => input::Button::MouseMiddle,
+										glutin::MouseButton::Right => input::Button::MouseRight,
+										glutin::MouseButton::Other(4) => input::Button::Mouse4,
+										glutin::MouseButton::Other(5) => input::Button::Mouse5,
+										glutin::MouseButton::Other(6) => input::Button::Mouse6,
+										glutin::MouseButton::Other(7) => input::Button::Mouse7,
+										glutin::MouseButton::Other(8) => input::Button::Mouse8,
+										glutin::MouseButton::Other(_) => input::Button::Unknown,
 									})
 								}
 							});
 						}
-						winit::WindowEvent::MouseWheel { delta, .. } => {
+						glutin::WindowEvent::MouseWheel { delta, .. } => {
 							event_queue.push(events::MouseScrolledEvent::new(match delta {
-								winit::MouseScrollDelta::LineDelta(x, y) => Vec2::new(x.into(), y.into()),
-								winit::MouseScrollDelta::PixelDelta(d) => Vec2::new(d.x as Float, d.y as Float),
+								glutin::MouseScrollDelta::LineDelta(x, y) => Vec2::new(x.into(), y.into()),
+								glutin::MouseScrollDelta::PixelDelta(d) => Vec2::new(d.x as Float, d.y as Float),
 								// NOTE: Perhaps scrolling speed will be fucked
 								// depending on which eventis received here.
 							}));
 						}
-						winit::WindowEvent::CursorMoved { position: pos, .. } => {
+						glutin::WindowEvent::CursorMoved { position: pos, .. } => {
 							event_queue.push(events::MouseMovedEvent::new(Vec2::new(pos.x as Float, pos.y as Float)));
 						}
 						_ => {}
@@ -273,12 +278,15 @@ impl Window {
 
 	pub fn clear_screen(&mut self) {
 		unsafe {
-			// gl::ClearColor(0.05, 0.05, 0.09, 1.0);
-			// gl::Clear(gl::COLOR_BUFFER_BIT);
+			gl::ClearColor(0.05, 0.05, 0.09, 1.0);
+			gl::Clear(gl::COLOR_BUFFER_BIT);
 		}
 	}
 
-	pub fn swap_buffers(&mut self) {
-		// is this even possible with winit?
+	pub fn swap_buffers(&mut self) -> Result<(), Error> {
+		match self.glutin_window.swap_buffers() {
+			Ok(()) => Ok(()),
+			Err(_err) => Err(Error {}),
+		}
 	}
 }
