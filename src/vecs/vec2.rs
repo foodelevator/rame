@@ -1,4 +1,5 @@
 use crate::Float;
+use std::fmt;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Vec2 {
@@ -39,4 +40,10 @@ impl Vec2 {
 		}
 	}
 	// TODO: implement ops
+}
+
+impl fmt::Display for Vec2 {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "({}, {})", self.x, self.y)
+	}
 }
