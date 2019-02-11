@@ -1,7 +1,7 @@
 use crate::error::Error;
 use crate::events::{self, EventListener};
 use crate::input::{Button, INPUT_STATE};
-use crate::layers::{Layer, LayerStack};
+use crate::layers::{self, Layer, LayerStack};
 use crate::vecs::Vec2;
 use crate::window;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -19,11 +19,13 @@ impl Application {
 			return Err(Error {});
 		}
 
-		let application = Application {
+		let mut application = Application {
 			is_running: true,
 			window: window::Window::new(title, width, height, vsync)?,
 			layer_stack: LayerStack::new(),
 		};
+
+		application.push_layer(Box::new(layers::imgui_layer::ImGuiLayer::new()));
 
 		Ok(application)
 	}
