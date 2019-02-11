@@ -18,7 +18,7 @@ impl Application {
 		if APPLICATION_EXISTS.swap(true, Ordering::Relaxed) {
 			return Err(Error {});
 		}
-		
+
 		let application = Application {
 			is_running: true,
 			window: window::Window::new(title, width, height, vsync)?,
