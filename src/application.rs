@@ -2,20 +2,24 @@ use crate::error::Error;
 use crate::events::{self, EventListener};
 use crate::layers::{Layer, LayerStack};
 use crate::window;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 pub struct Application {
-	running: bool,
+	is_running: bool,
 	window: window::Window,
 	layer_stack: LayerStack,
 }
 
+static APPLICATION_EXISTS: AtomicBool = AtomicBool::new(false);
 impl Application {
 	pub fn new(title: &str, width: u32, height: u32, vsync: bool) -> Result<Application, Error> {
-		let window = window::Window::new(title, width, height, vsync)?;
-
+		if APPLICATION_EXISTS.swap(true, Ordering::Relaxed) {
+			return Err(Error {});
+		}
+		
 		let application = Application {
-			running: true,
-			window,
+			is_running: true,
+			window: window::Window::new(title, width, height, vsync)?,
 			layer_stack: LayerStack::new(),
 		};
 
@@ -23,7 +27,7 @@ impl Application {
 	}
 
 	pub fn start(mut self) {
-		while self.running {
+		while self.is_running {
 			self.window.on_update();
 			while let Some(mut event) = self.window.pop_event() {
 				event.dispatch(&mut self);
@@ -47,7 +51,7 @@ impl Application {
 				event.dispatch(layer.as_event_listener());
 			}
 
-			self.window.swap_buffers();
+			self.window.swap_buffers().unwrap();
 		}
 	}
 
