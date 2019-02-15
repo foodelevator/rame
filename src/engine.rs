@@ -6,20 +6,20 @@ use crate::vecs::Vec2;
 use crate::window;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-pub struct Application {
+pub struct Engine {
 	is_running: bool,
 	window: window::Window,
 	layer_stack: LayerStack,
 }
 
 static APPLICATION_EXISTS: AtomicBool = AtomicBool::new(false);
-impl Application {
-	pub fn new(title: &str, width: u32, height: u32, vsync: bool) -> Result<Application, Error> {
+impl Engine {
+	pub fn new(title: &str, width: u32, height: u32, vsync: bool) -> Result<Engine, Error> {
 		if APPLICATION_EXISTS.swap(true, Ordering::Relaxed) {
 			return Err(Error {});
 		}
 
-		let application = Application {
+		let application = Engine {
 			is_running: true,
 			window: window::Window::new(title, width, height, vsync)?,
 			layer_stack: LayerStack::new(),
@@ -68,7 +68,7 @@ impl Application {
 	}
 }
 
-impl EventListener for Application {
+impl EventListener for Engine {
 	fn on_window_closed(&mut self) {
 		self.is_running = false;
 	}
@@ -324,7 +324,7 @@ impl EventListener for Application {
 	}
 }
 
-impl Drop for Application {
+impl Drop for Engine {
 	fn drop(&mut self) {
 		APPLICATION_EXISTS.store(false, Ordering::Relaxed);
 	}
