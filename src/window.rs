@@ -1,14 +1,31 @@
 use crate::error::Error;
-use crate::events::{self, EventBox, EventQueue};
+use crate::events::{self, EventQueue};
 use crate::vecs::Vec2;
 use crate::Float;
+
+pub struct WindowOptions {
+	title: String,
+	width: u32,
+	height: u32,
+	vsync: bool,
+}
+
+impl Into<WindowOptions> for (&str, u32, u32, bool) {
+	fn into(self) -> WindowOptions {
+		WindowOptions {
+			title: self.0.into(),
+			width: self.1,
+			height: self.2,
+			vsync: self.3,
+		}
+	}
+}
 
 pub struct Window {
 	title: String,
 	width: u32,
 	height: u32,
 	vsync: bool,
-	event_queue: EventQueue,
 	// glutin specific stuff
 	glutin_window: glutin::GlWindow,
 	glutin_events: glutin::EventsLoop,
@@ -30,21 +47,17 @@ impl Window {
 	pub fn get_vsync(&self) -> bool {
 		self.vsync
 	}
-
-	pub fn pop_event(&mut self) -> Option<EventBox> {
-		self.event_queue.next()
-	}
 }
 
 // glfw specific stuff
 impl Window {
-	pub fn new(title: &str, width: u32, height: u32, vsync: bool) -> Result<Window, Error> {
+	pub fn new(opts: WindowOptions) -> Result<Window, Error> {
 		let glutin_events = glutin::EventsLoop::new();
 		let window_builder = glutin::WindowBuilder::new()
-			.with_dimensions(glutin::dpi::LogicalSize::new(width as _, height as _))
-			.with_title(title);
+			.with_dimensions(glutin::dpi::LogicalSize::new(opts.width as _, opts.height as _))
+			.with_title(opts.title.clone());
 		let gl_context = glutin::ContextBuilder::new().
-			with_vsync(vsync);
+			with_vsync(opts.vsync);
 
 		let glutin_window = match glutin::GlWindow::new(window_builder, gl_context, &glutin_events) {
 			Ok(w) => w,
@@ -58,11 +71,10 @@ impl Window {
 		}
 
 		Ok(Window {
-			title: title.to_string(),
-			width,
-			height,
-			vsync,
-			event_queue: EventQueue::new(),
+			title: opts.title,
+			width: opts.width,
+			height: opts.height,
+			vsync: opts.vsync,
 			glutin_window,
 			glutin_events,
 		})
@@ -73,7 +85,7 @@ impl Window {
 		unimplemented!();
 	}
 
-	pub fn on_update(&mut self) {
+	pub fn on_update(&mut self) -> EventQueue {
 		use crate::input;
 
 		let mut event_queue = EventQueue::new();
@@ -271,9 +283,7 @@ impl Window {
 			self.height = new_size.1;
 		}
 
-		while let Some(event) = event_queue.next() {
-			self.event_queue.push(event);
-		}
+		event_queue
 	}
 
 	pub fn clear_color(&mut self, r: Float, g: Float, b: Float) {

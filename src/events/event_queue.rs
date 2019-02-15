@@ -18,3 +18,11 @@ impl EventQueue {
 		self.queue.pop_front()
 	}
 }
+
+impl Iterator for EventQueue {
+	type Item = EventBox;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		self.queue.pop_front()
+	}
+}

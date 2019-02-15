@@ -1,40 +1,40 @@
 use crate::error::Error;
-use crate::events::{self, EventListener};
+use crate::application::Application;
+use crate::events::EventListener;
 use crate::input::{Button, INPUT_STATE};
 use crate::layers::{Layer, LayerStack};
 use crate::vecs::Vec2;
-use crate::window;
-use std::sync::atomic::{AtomicBool, Ordering};
+use crate::window::{Window, WindowOptions};
 
-pub struct Engine {
+pub struct Engine<A> {
 	is_running: bool,
-	window: window::Window,
+	window: Window,
 	layer_stack: LayerStack,
+	app: A,
 }
 
-static APPLICATION_EXISTS: AtomicBool = AtomicBool::new(false);
-impl Engine {
-	pub fn new(title: &str, width: u32, height: u32, vsync: bool) -> Result<Engine, Error> {
-		if APPLICATION_EXISTS.swap(true, Ordering::Relaxed) {
-			return Err(Error {});
-		}
+impl<A> Engine<A>
+where A: Application
+{
+	pub fn init<W>(app: A, window_opts: W) -> Result<(), Error>
+	where W: Into<WindowOptions> {
 
-		let application = Engine {
+		let mut engine = Engine {
 			is_running: true,
-			window: window::Window::new(title, width, height, vsync)?,
+			window: Window::new(window_opts.into())?,
 			layer_stack: LayerStack::new(),
+			app
 		};
 
-		Ok(application)
+		engine.main_loop()?;
+
+		Ok(())
 	}
 
-	pub fn start(mut self) {
-		self.window.clear_color(0.15, 0.1, 0.9);
-
+	fn main_loop(&mut self) -> Result<(), Error> {
 		while self.is_running {
-			self.window.on_update();
-			while let Some(mut event) = self.window.pop_event() {
-				event.dispatch(&mut self);
+			for mut event in self.window.on_update() {
+				event.dispatch(self);
 				for layer in self.layer_stack.iter_mut().rev() {
 					event.dispatch(layer.as_event_listener());
 					if event.is_handled() {
@@ -43,20 +43,20 @@ impl Engine {
 				}
 			}
 
-			let mut event = events::AppUpdateEvent::new();
-			for layer in self.layer_stack.iter_mut() {
-				event.dispatch(layer.as_event_listener());
+			for layer in self.layer_stack.iter_mut().rev() {
+				layer.on_update();
 			}
 
 			self.window.clear_screen();
 
-			let mut event = events::AppRenderEvent::new();
 			for layer in self.layer_stack.iter_mut() {
-				event.dispatch(layer.as_event_listener());
+				layer.on_render();
 			}
 
 			self.window.swap_buffers().unwrap();
 		}
+		
+		Ok(())
 	}
 
 	pub fn push_layer(&mut self, layer: Box<dyn Layer>) {
@@ -68,7 +68,7 @@ impl Engine {
 	}
 }
 
-impl EventListener for Engine {
+impl<A> EventListener for Engine<A> {
 	fn on_window_closed(&mut self) {
 		self.is_running = false;
 	}
@@ -321,11 +321,5 @@ impl EventListener for Engine {
 			}
 		}
 		false
-	}
-}
-
-impl Drop for Engine {
-	fn drop(&mut self) {
-		APPLICATION_EXISTS.store(false, Ordering::Relaxed);
 	}
 }
