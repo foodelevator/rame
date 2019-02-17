@@ -1,5 +1,5 @@
-use crate::error::Error;
 use crate::application::Application;
+use crate::error::Error;
 use crate::events::EventListener;
 use crate::input::{Button, INPUT_STATE};
 use crate::layers::{Layer, LayerStack};
@@ -9,33 +9,57 @@ use crate::window::{Window, WindowOptions};
 pub struct Engine<A> {
 	is_running: bool,
 	window: Window,
-	layer_stack: LayerStack,
 	app: A,
+	data: EngineData,
+}
+
+pub struct EngineData {
+	layer_stack: LayerStack,
+}
+
+impl EngineData {
+	pub fn push_layer(&mut self, layer: Box<dyn Layer>) {
+		self.layer_stack.push_layer(layer);
+	}
+
+	pub fn push_overlay(&mut self, layer: Box<dyn Layer>) {
+		self.layer_stack.push_overlay(layer);
+	}
 }
 
 impl<A> Engine<A>
-where A: Application
+where
+	A: Application,
 {
 	pub fn init<W>(app: A, window_opts: W) -> Result<(), Error>
-	where W: Into<WindowOptions> {
-
-		let mut engine = Engine {
-			is_running: true,
-			window: Window::new(window_opts.into())?,
-			layer_stack: LayerStack::new(),
-			app
-		};
+	where
+		W: Into<WindowOptions>,
+	{
+		let mut engine = Engine::new(app, window_opts.into())?;
 
 		engine.main_loop()?;
 
 		Ok(())
 	}
 
+	fn new(app: A, window_opts: WindowOptions) -> Result<Self, Error> {
+		Ok(Self {
+			is_running: true,
+			window: Window::new(window_opts)?,
+			app,
+			data: EngineData {
+				layer_stack: LayerStack::new(),
+			},
+		})
+	}
+
 	fn main_loop(&mut self) -> Result<(), Error> {
+		self.app.start(&mut self.data);
+
 		while self.is_running {
 			for mut event in self.window.on_update() {
 				event.dispatch(self);
-				for layer in self.layer_stack.iter_mut().rev() {
+				for layer in self.data.layer_stack.iter_mut().rev() {
 					event.dispatch(layer.as_event_listener());
 					if event.is_handled() {
 						break;
@@ -43,28 +67,22 @@ where A: Application
 				}
 			}
 
-			for layer in self.layer_stack.iter_mut().rev() {
+			for layer in self.data.layer_stack.iter_mut().rev() {
 				layer.on_update();
 			}
 
 			self.window.clear_screen();
 
-			for layer in self.layer_stack.iter_mut() {
+			for layer in self.data.layer_stack.iter_mut() {
 				layer.on_render();
 			}
 
 			self.window.swap_buffers().unwrap();
 		}
-		
+
+		self.app.close();
+
 		Ok(())
-	}
-
-	pub fn push_layer(&mut self, layer: Box<dyn Layer>) {
-		self.layer_stack.push_layer(layer);
-	}
-
-	pub fn push_overlay(&mut self, layer: Box<dyn Layer>) {
-		self.layer_stack.push_overlay(layer);
 	}
 }
 

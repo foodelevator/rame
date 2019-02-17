@@ -1,6 +1,6 @@
-use crate::engine::Engine;
+use crate::engine::EngineData;
 
 pub trait Application {
-    fn start<A>(&mut self, engine: &mut Engine<A>) where A: Application;
-    fn close<A>(&mut self, engine: &mut Engine<A>) where A: Application;
+    fn start(&mut self, ed: &mut EngineData);
+    fn close(&mut self);
 }
